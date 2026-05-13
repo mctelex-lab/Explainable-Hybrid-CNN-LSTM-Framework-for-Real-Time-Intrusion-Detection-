@@ -56,7 +56,7 @@ st.markdown('<p class="sub-header">Explainable Hybrid CNN-LSTM • Real-Time Int
 # ====================== LOAD MODEL ======================
 @st.cache_resource
 def load_artifacts():
-    artifacts_dir = "deployment"
+    artifacts_dir = "Models"
     scaler = joblib.load(f'{artifacts_dir}/scaler.pkl')
     imputer = joblib.load(f'{artifacts_dir}/imputer.pkl')
     
