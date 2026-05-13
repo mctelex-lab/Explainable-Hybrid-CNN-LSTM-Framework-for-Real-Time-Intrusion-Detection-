@@ -1,23 +1,16 @@
-# app.py - With NumPy compatibility handling
+# app.py - Fixed: set_page_config FIRST
 import streamlit as st
-import sys
-import warnings
 
-# Suppress numpy warnings
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-warnings.filterwarnings('ignore', category=UserWarning)
+# ===================== MUST BE FIRST =====================
+st.set_page_config(
+    page_title="CyberGuard IDS",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+# =========================================================
 
-# Display version info for debugging
-st.sidebar.text(f"Python: {sys.version[:50]}")
-
-# Import numpy with error handling
-try:
-    import numpy as np
-    st.sidebar.text(f"NumPy: {np.__version__}")
-except ImportError as e:
-    st.error(f"NumPy import error: {e}")
-    st.stop()
-
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
@@ -26,18 +19,33 @@ import joblib
 import json
 import plotly.express as px
 import os
+import sys
+import warnings
 
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Display version info for debugging (NOW AFTER set_page_config)
+st.sidebar.text(f"Python: {sys.version[:50]}")
+st.sidebar.text(f"NumPy: {np.__version__}")
 st.sidebar.text(f"TensorFlow: {tf.__version__}")
 
-st.set_page_config(page_title="IDS Dashboard", layout="wide", page_icon="🛡️")
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header { font-size: 2.8rem; color: #0E86D4; text-align: center; margin-bottom: 0.5rem; font-weight: 700; }
+    .sub-header { font-size: 1.4rem; color: #00C9A7; text-align: center; margin-bottom: 2rem; }
+    .stButton>button { background-color: #0E86D4; color: white; border-radius: 8px; height: 3em; font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
 
-st.title("🛡️ Real-Time Network Intrusion Detection System")
-st.markdown("*Optimized Neural Network with Dual XAI (LIME + SHAP) for Enterprise Security*")
+st.markdown('<h1 class="main-header">🛡️ CyberGuard IDS</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Explainable Hybrid Neural Network for Real-Time Intrusion Detection</p>', unsafe_allow_html=True)
+st.markdown("**Developed by Samuel Ayorinde** | PGD Cybersecurity | Supervised by Mr. Victor Akuboh")
+st.divider()
 
 def build_model_from_architecture(input_dim):
-    """
-    Rebuild the exact model architecture from training.
-    """
+    """Rebuild the exact model architecture from training."""
     model = keras.Sequential([
         layers.Input(shape=(input_dim,)),
         layers.BatchNormalization(),
@@ -129,7 +137,6 @@ def load_artifacts():
         
     except Exception as e:
         st.error(f"Failed to load artifacts: {e}")
-        st.info("Check that deployment folder contains: scaler.pkl, imputer.pkl, feature_names.json, metadata.json, and model.weights.h5")
         return None, None, None, None, None
 
 # Load artifacts
@@ -226,7 +233,6 @@ if uploaded is not None:
                 
             except Exception as e:
                 st.error(f"Analysis error: {e}")
-                st.info("Please ensure your CSV contains network flow features")
 
 # XAI Section
 with st.expander("🔍 Explainable AI (LIME + SHAP)", expanded=False):
@@ -242,4 +248,4 @@ with st.expander("🔍 Explainable AI (LIME + SHAP)", expanded=False):
                 st.image(f"lime_explanation_{i}.png", use_container_width=True)
 
 st.markdown("---")
-st.caption("🔒 Enterprise-Grade Intrusion Detection System")
+st.caption("🔒 Enterprise-Grade Intrusion Detection System | Powered by TensorFlow, LIME & SHAP")
