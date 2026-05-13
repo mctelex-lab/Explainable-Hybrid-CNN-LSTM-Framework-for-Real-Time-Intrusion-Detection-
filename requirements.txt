@@ -1,0 +1,25 @@
+# Core ML/DL Framework
+tensorflow>=2.12.0,<2.16.0
+numpy>=1.23.0,<1.25.0
+pandas>=1.5.0,<2.0.0
+scikit-learn>=1.2.0,<1.3.0
+
+# XAI Libraries
+shap>=0.41.0
+lime>=0.2.0.1
+
+# Visualization
+matplotlib>=3.6.0
+seaborn>=0.12.0
+plotly>=5.13.0
+
+# Streamlit Dashboard
+streamlit>=1.25.0
+
+# Utilities
+joblib>=1.2.0
+imbalanced-learn>=0.10.0
+
+# Optional but recommended
+ipython>=8.10.0
+jupyter>=1.0.0

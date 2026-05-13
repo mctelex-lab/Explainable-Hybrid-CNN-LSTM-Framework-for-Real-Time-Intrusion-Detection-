@@ -1,0 +1,28 @@
+{
+  "model_name": "Optimized_IDS_Model",
+  "total_parameters": 16677,
+  "evaluation_metrics": {
+    "accuracy": 0.9781333333333333,
+    "balanced_accuracy": 0.9783674106446074,
+    "precision": 0.9895090786819098,
+    "recall": 0.9776744186046512,
+    "f1_score": 0.9835561497326203,
+    "roc_auc": 0.9974135521416307,
+    "optimal_threshold": 0.3297550082206726,
+    "true_negatives": 7294,
+    "false_positives": 156,
+    "false_negatives": 336,
+    "true_positives": 14714,
+    "specificity": 0.9790604026845637,
+    "sensitivity": 0.9776744186046512,
+    "inference_latency_ms": 58.36699962615967
+  },
+  "cross_validation": {
+    "mean_f1": 0.9827957909870179,
+    "std_f1": 0.0006039142920639238,
+    "mean_auc": 0.997405759588565,
+    "std_auc": 0.00017849748273722856
+  },
+  "xai_implemented": true,
+  "export_timestamp": "2026-05-13T07:03:54.522566"
+}
