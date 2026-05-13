@@ -1,4 +1,4 @@
-# app.py - Fixed: set_page_config FIRST
+# app.py - FIRST LINE MUST BE set_page_config
 import streamlit as st
 
 # ===================== MUST BE FIRST =====================
@@ -10,6 +10,7 @@ st.set_page_config(
 )
 # =========================================================
 
+# THEN all other imports
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -25,7 +26,7 @@ import warnings
 # Suppress warnings
 warnings.filterwarnings('ignore')
 
-# Display version info for debugging (NOW AFTER set_page_config)
+# Display version info for debugging (AFTER set_page_config)
 st.sidebar.text(f"Python: {sys.version[:50]}")
 st.sidebar.text(f"NumPy: {np.__version__}")
 st.sidebar.text(f"TensorFlow: {tf.__version__}")
