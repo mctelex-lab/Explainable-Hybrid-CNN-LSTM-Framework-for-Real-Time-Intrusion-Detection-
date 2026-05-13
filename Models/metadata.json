@@ -1,28 +1,31 @@
 {
   "model_name": "Optimized_IDS_Model",
   "total_parameters": 16677,
+  "input_dim": 41,
   "evaluation_metrics": {
-    "accuracy": 0.9781333333333333,
-    "balanced_accuracy": 0.9783674106446074,
-    "precision": 0.9895090786819098,
-    "recall": 0.9776744186046512,
-    "f1_score": 0.9835561497326203,
-    "roc_auc": 0.9974135521416307,
-    "optimal_threshold": 0.3297550082206726,
-    "true_negatives": 7294,
-    "false_positives": 156,
-    "false_negatives": 336,
-    "true_positives": 14714,
-    "specificity": 0.9790604026845637,
-    "sensitivity": 0.9776744186046512,
-    "inference_latency_ms": 58.36699962615967
+    "accuracy": 0.9784,
+    "balanced_accuracy": 0.9771433030836807,
+    "precision": 0.986764705882353,
+    "recall": 0.9808637873754152,
+    "f1_score": 0.9838053982005998,
+    "roc_auc": 0.997364364868782,
+    "optimal_threshold": 0.2607876658439636,
+    "true_negatives": 7252,
+    "false_positives": 198,
+    "false_negatives": 288,
+    "true_positives": 14762,
+    "specificity": 0.9734228187919463,
+    "sensitivity": 0.9808637873754152,
+    "inference_latency_ms": 61.15930795669556
   },
   "cross_validation": {
-    "mean_f1": 0.9827957909870179,
-    "std_f1": 0.0006039142920639238,
-    "mean_auc": 0.997405759588565,
-    "std_auc": 0.00017849748273722856
+    "mean_f1": 0.9825372430491406,
+    "std_f1": 0.0008672864402932286,
+    "mean_auc": 0.9973595523896711,
+    "std_auc": 9.353114763786684e-05
   },
   "xai_implemented": true,
-  "export_timestamp": "2026-05-13T07:03:54.522566"
+  "export_timestamp": "2026-05-13T15:59:25.361138",
+  "tensorflow_version": "2.19.0",
+  "deployment_instructions": "Use model_architecture.json + model.weights.h5 for Streamlit"
 }

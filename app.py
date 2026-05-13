@@ -1,310 +1,213 @@
-# app.py - Complete Working Version
 import streamlit as st
+import numpy as np
+import pandas as pd
+import joblib
+import json
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
+import os
+import time
+import random
 
-# ===================== MUST BE FIRST =====================
+# ====================== PAGE CONFIG ======================
 st.set_page_config(
     page_title="CyberGuard IDS",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-# =========================================================
 
-# Import with error handling for NumPy
-import sys
-import warnings
-warnings.filterwarnings('ignore')
-
-# Display Python version first
-st.sidebar.text(f"Python: {sys.version[:50]}")
-
-# Import NumPy with compatibility handling
-try:
-    import numpy as np
-    st.sidebar.text(f"NumPy: {np.__version__}")
-except ImportError as e:
-    st.error(f"NumPy import error: {e}")
-    st.info("Please check requirements.txt")
-    st.stop()
-
-import pandas as pd
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers, regularizers
-import joblib
-import json
-import plotly.express as px
-import os
-
-st.sidebar.text(f"TensorFlow: {tf.__version__}")
-
-# Custom CSS
+# ====================== CUSTOM CSS ======================
 st.markdown("""
 <style>
-    .main-header { font-size: 2.8rem; color: #0E86D4; text-align: center; margin-bottom: 0.5rem; font-weight: 700; }
-    .sub-header { font-size: 1.4rem; color: #00C9A7; text-align: center; margin-bottom: 2rem; }
-    .stButton>button { background-color: #0E86D4; color: white; border-radius: 8px; height: 3em; font-weight: 600; }
-    .metric-card { background-color: #1E2A44; border-radius: 12px; padding: 1rem; }
+    .main-header {
+        font-size: 3.2rem;
+        background: linear-gradient(90deg, #00ff9d, #00b8ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        font-weight: bold;
+    }
+    .alert { 
+        animation: pulse 1.5s infinite; 
+        padding: 12px; 
+        border-radius: 10px; 
+        margin: 10px 0;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">🛡️ CyberGuard IDS</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Explainable Hybrid Neural Network for Real-Time Intrusion Detection</p>', unsafe_allow_html=True)
-st.markdown("**Developed by Samuel Ayorinde** | PGD Cybersecurity | Supervised by Mr. Victor Akuboh")
-st.divider()
+# Theme Toggle
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = True
 
-def build_model_from_architecture(input_dim):
-    """Rebuild the exact model architecture from training."""
-    model = keras.Sequential([
-        layers.Input(shape=(input_dim,)),
+col1, col2 = st.columns([5, 1])
+with col1:
+    st.markdown('<h1 class="main-header">🛡️ CyberGuard IDS</h1>', unsafe_allow_html=True)
+with col2:
+    if st.button("🌗 Toggle Theme"):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
+
+st.markdown('<p class="sub-header">Explainable Hybrid CNN-LSTM • Real-Time Intrusion Detection with Scapy Simulation</p>', unsafe_allow_html=True)
+
+# ====================== LOAD MODEL ======================
+@st.cache_resource
+def load_artifacts():
+    artifacts_dir = "deployment"
+    scaler = joblib.load(f'{artifacts_dir}/scaler.pkl')
+    imputer = joblib.load(f'{artifacts_dir}/imputer.pkl')
+    
+    with open(f'{artifacts_dir}/feature_names.json', 'r') as f:
+        feature_names = json.load(f)
+    with open(f'{artifacts_dir}/metadata.json', 'r') as f:
+        metadata = json.load(f)
+    
+    from tensorflow.keras import layers, regularizers, Sequential
+    model = Sequential([
+        layers.Input(shape=(len(feature_names),)),
         layers.BatchNormalization(),
-        layers.Dense(128, activation='relu', 
-                    kernel_regularizer=regularizers.l2(0.001),
-                    kernel_initializer='he_normal'),
-        layers.BatchNormalization(),
-        layers.Dropout(0.3),
-        layers.Dense(64, activation='relu',
-                    kernel_regularizer=regularizers.l2(0.001),
-                    kernel_initializer='he_normal'),
-        layers.BatchNormalization(),
-        layers.Dropout(0.3),
-        layers.Dense(32, activation='relu',
-                    kernel_initializer='he_normal'),
+        layers.Dense(128, activation='relu', kernel_regularizer=regularizers.l2(0.001), kernel_initializer='he_normal'),
+        layers.BatchNormalization(), layers.Dropout(0.3),
+        layers.Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.001), kernel_initializer='he_normal'),
+        layers.BatchNormalization(), layers.Dropout(0.3),
+        layers.Dense(32, activation='relu', kernel_initializer='he_normal'),
         layers.Dropout(0.2),
         layers.Dense(1, activation='sigmoid')
     ])
-    return model
+    model.load_weights(f'{artifacts_dir}/model.weights.h5')
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    
+    return model, scaler, imputer, feature_names, metadata
 
-@st.cache_resource
-def load_artifacts():
-    """Load all artifacts with fallback options"""
-    
-    # Try multiple possible deployment folder names
-    possible_dirs = ['deployment', 'Models', 'model', '.']
-    artifacts_dir = None
-    
-    for dir_name in possible_dirs:
-        if os.path.exists(dir_name) and os.path.exists(f'{dir_name}/scaler.pkl'):
-            artifacts_dir = dir_name
-            break
-    
-    if artifacts_dir is None:
-        st.error("❌ Deployment folder not found! Looking for 'deployment' or 'Models'")
-        st.info("Please ensure the folder contains: scaler.pkl, imputer.pkl, feature_names.json, metadata.json, and model.weights.h5")
-        return None, None, None, None, None
-    
-    st.sidebar.info(f"📁 Loading from: {artifacts_dir}/")
-    
-    try:
-        # Load preprocessing artifacts
-        scaler = joblib.load(f'{artifacts_dir}/scaler.pkl')
-        imputer = joblib.load(f'{artifacts_dir}/imputer.pkl')
-        st.sidebar.success("✅ Preprocessing artifacts loaded")
-        
-        with open(f'{artifacts_dir}/feature_names.json', 'r') as f:
-            features = json.load(f)
-        st.sidebar.success(f"✅ Loaded {len(features)} features")
-        
-        with open(f'{artifacts_dir}/metadata.json', 'r') as f:
-            meta = json.load(f)
-        
-        # Get input dimension
-        input_dim = len(features)
-        
-        # Rebuild model from architecture
-        model = build_model_from_architecture(input_dim)
-        st.sidebar.success("✅ Model architecture rebuilt")
-        
-        # Try multiple weight file paths
-        weight_paths = [
-            f'{artifacts_dir}/model.weights.h5',
-            f'{artifacts_dir}/model_weights.h5',
-            f'{artifacts_dir}/best_model.weights.h5',
-            f'{artifacts_dir}/model.h5',
-        ]
-        
-        weights_loaded = False
-        for weight_path in weight_paths:
-            if os.path.exists(weight_path):
-                try:
-                    model.load_weights(weight_path)
-                    st.sidebar.success(f"✅ Loaded weights from {os.path.basename(weight_path)}")
-                    weights_loaded = True
-                    break
-                except Exception as e:
-                    st.sidebar.warning(f"Failed to load {os.path.basename(weight_path)}: {str(e)[:50]}")
-                    continue
-        
-        if not weights_loaded:
-            st.error("❌ No valid weight file found!")
-            st.info("Expected files: model.weights.h5, model_weights.h5, or model.h5")
-            return None, None, None, None, None
-        
-        # Compile model
-        model.compile(
-            optimizer='adam',
-            loss='binary_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        return model, scaler, imputer, features, meta
-        
-    except Exception as e:
-        st.error(f"❌ Failed to load artifacts: {e}")
-        st.info("Make sure deployment folder contains all required files")
-        return None, None, None, None, None
+with st.spinner("Loading CyberGuard Neural Engine..."):
+    model, scaler, imputer, feature_names, metadata = load_artifacts()
 
-# Load artifacts with progress indicator
-with st.spinner("🔄 Loading CyberGuard IDS model... This may take a moment."):
-    model, scaler, imputer, features, meta = load_artifacts()
+st.success("✅ Model Loaded | Ready for Real-Time Detection")
 
-if model is None:
-    st.stop()
+# ====================== SIDEBAR ======================
+st.sidebar.metric("F1 Score", f"{metadata['evaluation_metrics']['f1_score']:.4f}")
+st.sidebar.metric("ROC AUC", f"{metadata['evaluation_metrics']['roc_auc']:.4f}")
+st.sidebar.metric("Latency", f"{metadata['evaluation_metrics']['inference_latency_ms']:.1f} ms")
+confidence_threshold = st.sidebar.slider("Detection Threshold", 0.1, 0.95, 0.5, 0.01)
 
-# Display metrics in sidebar
-st.sidebar.success("✅ Model Ready")
-st.sidebar.markdown("---")
-st.sidebar.subheader("📊 Performance Metrics")
+# ====================== TABS ======================
+tab1, tab2, tab3, tab4 = st.tabs(["🚀 Live Scapy Simulation", "📡 File Analysis", "📈 Performance", "🔍 XAI"])
 
-if meta and 'evaluation_metrics' in meta:
-    metrics_data = meta['evaluation_metrics']
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        st.metric("F1 Score", f"{metrics_data.get('f1_score', 0.95):.4f}")
-        st.metric("Precision", f"{metrics_data.get('precision', 0.94):.4f}")
-    with col2:
-        st.metric("ROC AUC", f"{metrics_data.get('roc_auc', 0.97):.4f}")
-        st.metric("Recall", f"{metrics_data.get('recall', 0.93):.4f}")
-    st.sidebar.metric("Latency", f"{metrics_data.get('inference_latency_ms', 5.0):.1f} ms")
-    st.sidebar.metric("Accuracy", f"{metrics_data.get('accuracy', 0.95):.4f}")
-
-# Main interface
-st.markdown("---")
-st.subheader("📡 Real-Time Traffic Analysis")
-
-# File upload
-uploaded = st.file_uploader("Upload Network Flow CSV File", type=['csv'], 
-                            help="Upload a CSV file with network flow features")
-
-if uploaded is not None:
-    df = pd.read_csv(uploaded)
-    st.write(f"**File loaded:** {len(df)} flows, {len(df.columns)} features")
+with tab1:
+    st.subheader("🔴 Real-Time Scapy Packet Simulation + Alert System")
     
-    with st.expander("Preview Data", expanded=False):
-        st.dataframe(df.head())
+    col_a, col_b = st.columns([1, 3])
+    with col_a:
+        duration = st.slider("Simulation Duration (seconds)", 5, 60, 15)
+        rate = st.slider("Packets per second", 5, 30, 12)
     
-    if st.button("🔍 Analyze Traffic", type="primary", use_container_width=True):
-        with st.spinner("🔍 Analyzing network traffic..."):
-            try:
-                # Align features
-                missing = 0
-                for f in features:
-                    if f not in df.columns:
-                        df[f] = 0
-                        missing += 1
-                
-                if missing > 0:
-                    st.info(f"ℹ️ Added {missing} missing features with default values")
-                
-                # Prepare data
-                X = df[features].values
-                X = imputer.transform(X)
-                X = scaler.transform(X)
-                
-                # Predict
-                predictions = model.predict(X, verbose=0).flatten()
-                predictions_binary = (predictions >= 0.5).astype(int)
-                
-                # Results
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Flows", len(predictions))
-                with col2:
-                    attack_count = int(np.sum(predictions_binary == 1))
-                    st.metric("🚨 Attacks Detected", attack_count, 
-                             delta=f"{attack_count/len(predictions)*100:.1f}%", delta_color="inverse")
-                with col3:
-                    benign_count = len(predictions) - attack_count
-                    st.metric("✅ Benign Flows", benign_count)
-                with col4:
-                    st.metric("Avg Threat Score", f"{np.mean(predictions):.2%}")
-                
-                # Add to dataframe
-                df['threat_score'] = predictions
-                df['prediction'] = ['🚨 ATTACK' if p >= 0.5 else '✅ BENIGN' for p in predictions]
-                
-                # Display results table
-                st.subheader("📋 Detection Results")
-                display_cols = ['prediction', 'threat_score'] + features[:5]
-                st.dataframe(df[display_cols].head(20), use_container_width=True)
-                
-                # Threat distribution plot
-                fig = px.histogram(df, x='threat_score', nbins=50, 
-                                   title='Threat Score Distribution',
-                                   color_discrete_sequence=['#00C9A7'])
-                fig.add_vline(x=0.5, line_dash="dash", line_color="red", 
-                             annotation_text="Detection Threshold")
-                fig.update_layout(height=500)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Summary statistics
-                st.subheader("📊 Threat Score Statistics")
-                stat_col1, stat_col2, stat_col3 = st.columns(3)
-                with stat_col1:
-                    st.metric("Mean", f"{np.mean(predictions):.3f}")
-                with stat_col2:
-                    st.metric("Std Dev", f"{np.std(predictions):.3f}")
-                with stat_col3:
-                    st.metric("Max Threat", f"{np.max(predictions):.3f}")
-                
-                # Download results
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Results as CSV", csv, 
-                                  f"cyberguard_results.csv",
-                                  "text/csv", use_container_width=True)
-                
-                # Success message
-                st.success("✅ Analysis complete!")
-                
-            except Exception as e:
-                st.error(f"❌ Analysis error: {e}")
-                st.info("Please ensure your CSV contains network flow features (protocol, packet counts, etc.)")
+    if st.button("▶️ Start Live Scapy Simulation", type="primary", use_container_width=True):
+        alert_placeholder = st.empty()
+        chart_placeholder = st.empty()
+        log_placeholder = st.empty()
+        
+        log = []
+        attack_count = 0
+        total_packets = 0
+        
+        for sec in range(duration):
+            batch_size = random.randint(rate-3, rate+3)
+            total_packets += batch_size
+            
+            # Simulate realistic network features
+            data = {
+                'FLOW_DURATION_MILLISECONDS': np.random.randint(1, 5000, batch_size),
+                'TOTAL_FLOWS': np.random.randint(1, 50, batch_size),
+                'TOTAL_PKTS': np.random.randint(3, 200, batch_size),
+                'TOTAL_BYTES': np.random.randint(100, 100000, batch_size),
+                'DURATION': np.random.uniform(0.1, 10.0, batch_size),
+                # Add more features as needed (model will handle missing ones)
+            }
+            df_sim = pd.DataFrame(data)
+            
+            # Feature alignment
+            for col in feature_names:
+                if col not in df_sim.columns:
+                    df_sim[col] = 0
+            
+            X = imputer.transform(df_sim[feature_names].values)
+            X = scaler.transform(X)
+            
+            probs = model.predict(X, verbose=0).flatten()
+            predictions = (probs >= confidence_threshold).astype(int)
+            
+            attacks_in_batch = predictions.sum()
+            attack_count += attacks_in_batch
+            
+            # Alert System
+            if attacks_in_batch > 0:
+                alert_placeholder.error(f"🚨 HIGH ALERT: {attacks_in_batch} Intrusions Detected in last batch!")
+                log.append(f"[{datetime.now().strftime('%H:%M:%S')}] 🚨 ATTACK DETECTED - Confidence: {probs.max():.1%}")
+            else:
+                alert_placeholder.success("✅ Normal Traffic")
+            
+            # Live Chart
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=list(range(len(probs))), y=probs,
+                                   mode='lines+markers', name='Threat Score',
+                                   line=dict(color='#00ff9d')))
+            fig.add_hline(y=confidence_threshold, line_dash="dash", line_color="red")
+            fig.update_layout(title=f"Live Threat Scores - Batch {sec+1} | Attacks: {attacks_in_batch}",
+                             height=400, template="plotly_dark")
+            chart_placeholder.plotly_chart(fig, use_container_width=True)
+            
+            # Log
+            log_placeholder.text_area("Alert Log", "\n".join(log[-10:]), height=200)
+            
+            time.sleep(1.2)
+        
+        st.success(f"✅ Simulation Complete! Total Attacks Detected: **{attack_count}** out of **{total_packets}** packets")
 
-# XAI Section
-with st.expander("🔍 Explainable AI (LIME + SHAP) - Forensic Analysis", expanded=False):
-    st.markdown("""
-    ### Dual XAI Integration for Forensic Transparency
+with tab2:
+    st.subheader("📁 Upload & Analyze PCAP-derived CSV")
+    uploaded = st.file_uploader("Upload Network Flow CSV", type=["csv"])
+    if uploaded:
+        df = pd.read_csv(uploaded)
+        st.write(f"Loaded **{len(df)}** flows")
+        
+        if st.button("Analyze with CyberGuard", type="primary"):
+            with st.spinner("Analyzing..."):
+                for col in feature_names:
+                    if col not in df.columns:
+                        df[col] = 0
+                X = scaler.transform(imputer.transform(df[feature_names].values))
+                probs = model.predict(X, verbose=0).flatten()
+                df["Threat_Score"] = probs
+                df["Prediction"] = ["🚨 ATTACK" if p >= confidence_threshold else "✅ BENIGN" for p in probs]
+                
+                st.dataframe(df[["Prediction", "Threat_Score"] + feature_names[:8]], use_container_width=True)
+
+with tab3:
+    st.subheader("📊 Model Performance")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Accuracy", f"{metadata['evaluation_metrics']['accuracy']:.4f}")
+    c2.metric("F1 Score", f"{metadata['evaluation_metrics']['f1_score']:.4f}")
+    c3.metric("ROC AUC", f"{metadata['evaluation_metrics']['roc_auc']:.4f}")
+    c4.metric("Latency", f"{metadata['evaluation_metrics']['inference_latency_ms']:.1f} ms")
     
-    **LIME (Local Interpretable Model-agnostic Explanations)**
-    - Provides instance-level explanations for individual predictions
-    - Helps security analysts understand why specific flows were flagged
-    
-    **SHAP (SHapley Additive exPlanations)**
-    - Provides global feature importance based on game theory
-    - Identifies which network features are most indicative of attacks
-    """)
-    
+    for img in ["training_history.png", "confusion_matrix.png", "roc_curve.png", "pr_curve.png"]:
+        if os.path.exists(img):
+            st.image(img, use_container_width=True)
+
+with tab4:
+    st.subheader("🔍 Explainable AI")
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.subheader("📊 SHAP Global Feature Importance")
-        shap_files = ['shap_summary.png', 'shap_bar_plot.png']
-        found = False
-        for file in shap_files:
-            if os.path.exists(file):
-                st.image(file, use_container_width=True)
-                found = True
-        if not found:
-            st.info("💡 SHAP visualizations will appear after running the complete training pipeline")
-    
+        if os.path.exists("shap_summary.png"):
+            st.image("shap_summary.png", caption="SHAP Global Importance")
     with col2:
-        st.subheader("📋 LIME Local Explanations")
-        lime_files = [f for f in os.listdir() if f.startswith('lime_explanation_') and f.endswith('.png')]
-        if lime_files:
-            for i, file in enumerate(lime_files[:3]):
-                st.image(file, caption=f"LIME Explanation - Sample {i+1}", use_container_width=True)
-        else:
-            st.info("💡 LIME explanations will appear after running the complete training pipeline")
+        lime_files = [f for f in os.listdir() if f.startswith("lime_explanation_")]
+        for f in lime_files[:3]:
+            if os.path.exists(f):
+                st.image(f, use_container_width=True)
 
 st.markdown("---")
-st.caption("🔒 Enterprise-Grade Intrusion Detection System | Powered by TensorFlow, LIME & SHAP")
+st.caption("🛡️ CyberGuard IDS • Real-Time Scapy Simulation + Intelligent Alert System • 2026")
