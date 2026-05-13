@@ -15,12 +15,12 @@ st.markdown("*Optimized Neural Network with Dual XAI (LIME + SHAP) for Enterpris
 
 @st.cache_resource
 def load_artifacts():
-    model = tf.keras.models.load_model('deployment/model.keras')
-    scaler = joblib.load('deployment/scaler.pkl')
-    imputer = joblib.load('deployment/imputer.pkl')
-    with open('deployment/feature_names.json', 'r') as f:
+    model = tf.keras.models.load_model('Models/model.keras')
+    scaler = joblib.load('Models/scaler.pkl')
+    imputer = joblib.load('Models/imputer.pkl')
+    with open('Models/feature_names.json', 'r') as f:
         features = json.load(f)
-    with open('deployment/metadata.json', 'r') as f:
+    with open('Models/metadata.json', 'r') as f:
         meta = json.load(f)
     return model, scaler, imputer, features, meta
 
