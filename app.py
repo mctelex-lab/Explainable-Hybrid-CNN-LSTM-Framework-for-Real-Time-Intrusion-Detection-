@@ -8,6 +8,9 @@ import plotly.graph_objects as go
 from datetime import datetime
 import os
 import time
+import random
+import warnings
+warnings.filterwarnings('ignore')
 
 # ====================== PAGE CONFIG ======================
 st.set_page_config(
@@ -21,209 +24,182 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 3rem;
-        color: #00ff9d;
+        font-size: 3.2rem;
+        background: linear-gradient(90deg, #00ff9d, #00b8ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         text-align: center;
         font-weight: bold;
-        text-shadow: 0 0 20px #00ff9d;
         margin-bottom: 0;
     }
-    .sub-header {
-        font-size: 1.5rem;
-        color: #00b8ff;
-        text-align: center;
-        margin-bottom: 2rem;
+    .alert {
+        animation: pulse 1.5s infinite;
+        padding: 15px;
+        border-radius: 12px;
+        margin: 10px 0;
+        font-weight: bold;
     }
-    .metric-card {
-        background: linear-gradient(90deg, #1e3a8a, #0f172a);
-        padding: 1.5rem;
-        border-radius: 15px;
-        border: 1px solid #00ff9d;
-        box-shadow: 0 4px 15px rgba(0, 255, 157, 0.2);
-    }
-    .attack { color: #ff4444; font-weight: bold; }
-    .benign { color: #00ff9d; font-weight: bold; }
-    .stPlotlyChart { background: #0f172a; border-radius: 10px; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">🛡️ CyberGuard IDS</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Explainable Hybrid Neural Network for Real-Time Intrusion Detection</p>', unsafe_allow_html=True)
-st.caption("**Developed by Samuel Ayorinde** | PGD Cybersecurity | Powered by TensorFlow + LIME + SHAP")
+# Theme Toggle
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = True
 
-# ====================== LOAD ARTIFACTS ======================
+col1, col2 = st.columns([5, 1])
+with col1:
+    st.markdown('<h1 class="main-header">🛡️ CyberGuard IDS</h1>', unsafe_allow_html=True)
+with col2:
+    if st.button("🌗 Toggle Theme"):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
+
+st.markdown("**Explainable Hybrid Neural Network for Real-Time Intrusion Detection**")
+
+# ====================== ROBUST ARTIFACT LOADING ======================
 @st.cache_resource
 def load_artifacts():
+    artifacts_dir = "deployment"
     try:
-        artifacts_dir = "Models"
-        
         scaler = joblib.load(f'{artifacts_dir}/scaler.pkl')
         imputer = joblib.load(f'{artifacts_dir}/imputer.pkl')
-        
-        with open(f'{artifacts_dir}/feature_names.json', 'r') as f:
-            feature_names = json.load(f)
-        
-        with open(f'{artifacts_dir}/metadata.json', 'r') as f:
-            metadata = json.load(f)
-        
-        # Rebuild model architecture
-        from tensorflow.keras import layers, regularizers, Sequential
-        model = Sequential([
-            layers.Input(shape=(len(feature_names),)),
-            layers.BatchNormalization(),
-            layers.Dense(128, activation='relu', kernel_regularizer=regularizers.l2(0.001), kernel_initializer='he_normal'),
-            layers.BatchNormalization(),
-            layers.Dropout(0.3),
-            layers.Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.001), kernel_initializer='he_normal'),
-            layers.BatchNormalization(),
-            layers.Dropout(0.3),
-            layers.Dense(32, activation='relu', kernel_initializer='he_normal'),
-            layers.Dropout(0.2),
-            layers.Dense(1, activation='sigmoid')
-        ])
-        
-        model.load_weights(f'{artifacts_dir}/model.weights.h5')
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        
-        return model, scaler, imputer, feature_names, metadata
-    except Exception as e:
-        st.error(f"Failed to load model: {e}")
-        st.stop()
+    except Exception:
+        st.warning("⚠️ Using fallback preprocessors")
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.impute import SimpleImputer
+        scaler = StandardScaler()
+        imputer = SimpleImputer(strategy='median')
 
-with st.spinner("🔄 Loading CyberGuard Model & Artifacts..."):
+    with open(f'{artifacts_dir}/feature_names.json', 'r') as f:
+        feature_names = json.load(f)
+    with open(f'{artifacts_dir}/metadata.json', 'r') as f:
+        metadata = json.load(f)
+
+    # Rebuild Model
+    from tensorflow.keras import layers, regularizers, Sequential
+    model = Sequential([
+        layers.Input(shape=(len(feature_names),)),
+        layers.BatchNormalization(),
+        layers.Dense(128, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
+        layers.BatchNormalization(), layers.Dropout(0.3),
+        layers.Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
+        layers.BatchNormalization(), layers.Dropout(0.3),
+        layers.Dense(32, activation='relu'),
+        layers.Dropout(0.2),
+        layers.Dense(1, activation='sigmoid')
+    ])
+    
+    model.load_weights(f'{artifacts_dir}/model.weights.h5')
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    
+    return model, scaler, imputer, feature_names, metadata
+
+with st.spinner("🔄 Loading CyberGuard Neural Engine..."):
     model, scaler, imputer, feature_names, metadata = load_artifacts()
 
 st.success("✅ Model Loaded Successfully")
 
 # ====================== SIDEBAR ======================
-st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=80)
-st.sidebar.header("📊 Model Performance")
 st.sidebar.metric("F1 Score", f"{metadata['evaluation_metrics']['f1_score']:.4f}")
 st.sidebar.metric("ROC AUC", f"{metadata['evaluation_metrics']['roc_auc']:.4f}")
-st.sidebar.metric("Accuracy", f"{metadata['evaluation_metrics']['accuracy']:.4f}")
-st.sidebar.metric("Inference Latency", f"{metadata['evaluation_metrics']['inference_latency_ms']:.1f} ms")
+confidence_threshold = st.sidebar.slider("🔴 Detection Threshold", 0.1, 0.95, 0.50, 0.01)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("🛠️ Controls")
-confidence_threshold = st.sidebar.slider("Detection Threshold", 0.1, 0.95, 0.5, 0.01)
-
-# ====================== MAIN TABS ======================
-tab1, tab2, tab3, tab4 = st.tabs(["📡 Real-Time Detection", "📈 Performance", "🔍 Explainable AI", "📋 About"])
+# ====================== TABS ======================
+tab1, tab2, tab3, tab4 = st.tabs(["🚀 Live Scapy Simulation", "📁 File Analysis", "📈 Performance", "🔍 XAI"])
 
 with tab1:
-    st.subheader("📡 Real-Time Network Flow Analysis")
+    st.subheader("🔴 Real-Time Packet Generation (Scapy Style) + Alert System")
     
-    uploaded_file = st.file_uploader("Upload Network Flow CSV", type=["csv"], help="Upload flows with expected features")
+    col_a, col_b = st.columns([1, 3])
+    with col_a:
+        sim_duration = st.slider("Simulation Duration (seconds)", 5, 60, 20)
+        pkt_rate = st.slider("Packets per second", 5, 30, 12)
     
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.info(f"Loaded {len(df):,} network flows")
+    if st.button("▶️ Start Live Simulation", type="primary", use_container_width=True):
+        alert_area = st.empty()
+        chart_area = st.empty()
+        log_area = st.empty()
+        logs = []
         
-        if st.button("🚀 Analyze Traffic", type="primary", use_container_width=True):
-            with st.spinner("Analyzing with CyberGuard Neural Network..."):
+        for sec in range(sim_duration):
+            with alert_area.container():
+                batch_size = random.randint(pkt_rate-4, pkt_rate+4)
+                
+                # Simulate realistic network flows
+                sim_df = pd.DataFrame({
+                    'FLOW_DURATION_MILLISECONDS': np.random.randint(5, 8000, batch_size),
+                    'TOTAL_PKTS': np.random.randint(3, 250, batch_size),
+                    'TOTAL_BYTES': np.random.randint(150, 200000, batch_size),
+                    'DURATION': np.random.uniform(0.05, 15.0, batch_size),
+                })
+                
                 # Feature alignment
                 for col in feature_names:
-                    if col not in df.columns:
-                        df[col] = 0
+                    if col not in sim_df.columns:
+                        sim_df[col] = 0
                 
-                X = df[feature_names].values
-                X = imputer.transform(X)
+                X = imputer.transform(sim_df[feature_names].values)
                 X = scaler.transform(X)
                 
-                # Predict
-                start = time.time()
                 probs = model.predict(X, verbose=0).flatten()
-                latency = (time.time() - start) * 1000 / len(df)
+                attacks = (probs >= confidence_threshold).sum()
                 
-                df["Threat_Probability"] = probs
-                df["Prediction"] = np.where(probs >= confidence_threshold, "🚨 ATTACK", "✅ BENIGN")
+                if attacks > 0:
+                    st.error(f"🚨 HIGH ALERT: {attacks} Intrusions Detected!")
+                    logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] 🚨 ATTACK - {attacks} malicious flows")
+                else:
+                    st.success("✅ Traffic Normal")
                 
-                # Results
-                col1, col2, col3, col4 = st.columns(4)
-                attacks = (df["Prediction"] == "🚨 ATTACK").sum()
+                # Live Chart
+                fig = px.histogram(x=probs, nbins=40, title=f"Live Threat Scores - Second {sec+1}")
+                fig.add_vline(x=confidence_threshold, line_dash="dash", line_color="red", annotation_text="Threshold")
+                chart_area.plotly_chart(fig, use_container_width=True)
                 
-                with col1:
-                    st.metric("Total Flows", len(df))
-                with col2:
-                    st.metric("Attacks Detected", attacks, delta=f"{attacks/len(df)*100:.1f}%")
-                with col3:
-                    st.metric("Benign Flows", len(df) - attacks)
-                with col4:
-                    st.metric("Avg Latency", f"{latency:.1f} ms")
+                log_area.text_area("Alert Log", "\n".join(logs[-10:]), height=180)
                 
-                # Visualization
-                fig = px.histogram(df, x="Threat_Probability", nbins=50, 
-                                 title="Threat Probability Distribution",
-                                 color_discrete_sequence=["#00ff9d"],
-                                 marginal="box")
-                fig.add_vline(x=confidence_threshold, line_dash="dash", line_color="red")
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.subheader("Detection Results")
-                display_df = df[["Prediction", "Threat_Probability"] + feature_names[:8]].copy()
-                st.dataframe(display_df.style.applymap(
-                    lambda x: 'background-color: #ff4444' if isinstance(x, str) and 'ATTACK' in x else '', 
-                    subset=['Prediction']), use_container_width=True)
-                
-                # Download
-                csv = df.to_csv(index=False).encode()
-                st.download_button("📥 Download Full Report", csv, "cyberguard_detection_report.csv", "text/csv")
+                time.sleep(1.1)
 
 with tab2:
-    st.subheader("📈 Model Performance Dashboard")
-    
-    cols = st.columns(3)
-    with cols[0]:
-        st.metric("Accuracy", f"{metadata['evaluation_metrics']['accuracy']:.4f}")
-    with cols[1]:
-        st.metric("Precision", f"{metadata['evaluation_metrics']['precision']:.4f}")
-    with cols[2]:
-        st.metric("Recall", f"{metadata['evaluation_metrics']['recall']:.4f}")
-    
-    # Load saved images if available
-    image_files = {
-        "Training History": "training_history.png",
-        "Confusion Matrix": "confusion_matrix.png",
-        "ROC Curve": "roc_curve.png",
-        "Precision-Recall": "pr_curve.png"
-    }
-    
-    for title, path in image_files.items():
-        if os.path.exists(path):
-            st.image(path, caption=title, use_container_width=True)
+    st.subheader("📁 Upload Network Flow CSV")
+    uploaded = st.file_uploader("Upload CSV file", type=["csv"])
+    if uploaded and st.button("Analyze Traffic", type="primary"):
+        with st.spinner("Analyzing with CyberGuard..."):
+            df = pd.read_csv(uploaded)
+            for col in feature_names:
+                if col not in df.columns:
+                    df[col] = 0
+            X = scaler.transform(imputer.transform(df[feature_names].values))
+            probs = model.predict(X, verbose=0).flatten()
+            df["Threat_Score"] = probs
+            df["Prediction"] = np.where(probs >= confidence_threshold, "🚨 ATTACK", "✅ BENIGN")
+            
+            st.dataframe(df[["Prediction", "Threat_Score"] + feature_names[:7]], use_container_width=True)
+            st.download_button("Download Results", df.to_csv(index=False), "detection_results.csv")
 
 with tab3:
-    st.subheader("🔍 Dual Explainable AI (LIME + SHAP)")
-    st.markdown("**Transparency is Security**")
+    st.subheader("📈 Model Performance")
+    cols = st.columns(4)
+    cols[0].metric("Accuracy", f"{metadata['evaluation_metrics']['accuracy']:.4f}")
+    cols[1].metric("F1 Score", f"{metadata['evaluation_metrics']['f1_score']:.4f}")
+    cols[2].metric("ROC AUC", f"{metadata['evaluation_metrics']['roc_auc']:.4f}")
+    cols[3].metric("Latency", f"{metadata['evaluation_metrics']['inference_latency_ms']:.1f} ms")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image("shap_summary.png", caption="SHAP Global Feature Importance", use_container_width=True) if os.path.exists("shap_summary.png") else st.info("SHAP Summary will appear after training")
-    with col2:
-        st.image("shap_bar_plot.png", caption="SHAP Feature Impact (Bar)", use_container_width=True) if os.path.exists("shap_bar_plot.png") else st.info("SHAP Bar Plot will appear after training")
-    
-    st.markdown("### LIME Local Explanations")
-    lime_files = [f for f in os.listdir() if f.startswith("lime_explanation_") and f.endswith(".png")]
-    if lime_files:
-        for f in lime_files[:3]:
-            st.image(f, use_container_width=True)
-    else:
-        st.info("LIME explanations available after full training run.")
+    for img in ["training_history.png", "confusion_matrix.png", "roc_curve.png", "pr_curve.png"]:
+        if os.path.exists(img):
+            st.image(img, use_container_width=True)
 
 with tab4:
-    st.subheader("About CyberGuard IDS")
-    st.write("""
-    This is a production-grade **Explainable Hybrid Neural Network** for real-time intrusion detection 
-    built on the NF-UQ-NIDS dataset. 
-    
-    **Key Features:**
-    - Optimized Dense Architecture (fast inference)
-    - Dual XAI: LIME (local) + SHAP (global)
-    - SMOTE balancing + proper NaN handling
-    - Weights-only loading for Streamlit compatibility
-    """)
-    
-    st.caption("© 2026 Samuel Ayorinde | All Rights Reserved")
+    st.subheader("🔍 Explainable AI")
+    c1, c2 = st.columns(2)
+    with c1:
+        if os.path.exists("shap_summary.png"):
+            st.image("shap_summary.png", caption="SHAP Global Importance")
+    with c2:
+        lime_files = [f for f in os.listdir() if f.startswith("lime_explanation_")]
+        for f in lime_files[:3]:
+            if os.path.exists(f):
+                st.image(f, use_container_width=True)
 
 st.markdown("---")
-st.caption("🛡️ CyberGuard IDS • Enterprise-Grade • Explainable • Real-Time")
+st.caption("🛡️ CyberGuard IDS • Real-Time Scapy Simulation • Intelligent Alert System • Dual XAI")
