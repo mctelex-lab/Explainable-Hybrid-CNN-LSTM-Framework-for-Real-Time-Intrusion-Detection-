@@ -60,7 +60,7 @@ st.markdown("**Explainable Hybrid Neural Network for Real-Time Intrusion Detecti
 # ====================== ROBUST ARTIFACT LOADING ======================
 @st.cache_resource
 def load_artifacts():
-    artifacts_dir = "deployment"
+    artifacts_dir = "Models"
     try:
         scaler = joblib.load(f'{artifacts_dir}/scaler.pkl')
         imputer = joblib.load(f'{artifacts_dir}/imputer.pkl')
